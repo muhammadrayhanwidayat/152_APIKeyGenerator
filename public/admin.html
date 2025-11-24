@@ -1,0 +1,231 @@
+<!-- public/admin.html (revised)
+  - Keamanan: tetap pakai endpoints yang ada di server (/admin/login, /admin/register, /admin/api/users, /admin/api/user/:id/revoke)
+  - Penambahan: tombol DELETE per baris yang memanggil POST /admin/api/user/:id/delete (server harus memiliki route ini, contoh snippet ada di bawah)
+  - Polling otomatis tetap aktif (15s)
+-->
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin Panel — UwUntu Cyber Console</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+  <style>
+    body{font-family:'Poppins',sans-serif;margin:0;padding:18px;background:#fff0f6;color:#333}
+    .wrap{max-width:980px;margin:0 auto}
+    h1{color:#ff4081}
+    .card{background:#fff;border-radius:12px;padding:16px;margin-bottom:12px;box-shadow:0 6px 18px rgba(255,59,141,0.06)}
+    input{padding:8px;border-radius:8px;border:1px solid #ffd3e6;margin-right:8px}
+    button{padding:8px 12px;border-radius:8px;border:none;background:#ff4c86;color:white;cursor:pointer}
+    table{width:100%;border-collapse:collapse;margin-top:8px}
+    th,td{padding:8px;border-bottom:1px solid #ffe6f0;text-align:left;font-size:13px}
+    .btn-logout{background:#fff;color:#ff4c86;border:1px solid #ffd3e6;padding:6px 10px;border-radius:8px}
+    .status-online{color:green;font-weight:600}
+    .status-off{color:#999}
+    .action-btn{background:#fff;color:#ff4c86;border:1px solid #ffd3e6;padding:6px 8px;border-radius:6px;cursor:pointer;margin-right:6px}
+    .small{font-size:12px;color:#9a2f60}
+    .note {background:#fff7fb;border:1px solid #ffdce8;padding:10px;border-radius:8px;margin-top:12px;color:#7a2b4a}
+    code{background:#fff; padding:2px 6px;border-radius:4px;font-family:monospace}
+    .muted{color:#888;font-size:13px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Admin — UwUntu Cyber Console</h1>
+
+    <div class="card" id="authCard">
+      <div id="authForms">
+        <div style="margin-bottom:8px;">
+          <strong>Register Admin</strong><br>
+          <input id="regEmail" placeholder="email" />
+          <input id="regPass" placeholder="password" type="password" />
+          <button id="regBtn">Register</button>
+        </div>
+        <div>
+          <strong>Login</strong><br>
+          <input id="loginEmail" placeholder="email" />
+          <input id="loginPass" placeholder="password" type="password" />
+          <button id="loginBtn">Login</button>
+        </div>
+        <div id="authMsg" style="margin-top:8px;color:#9a2f60"></div>
+      </div>
+
+      <div id="adminTools" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><strong>Welcome, Admin</strong></div>
+          <div>
+            <button class="btn-logout" id="logoutBtn">Logout</button>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+          <button id="refreshBtn">Refresh list</button>
+          <button id="exportBtn" class="action-btn">Export CSV</button>
+        </div>
+
+        <div class="note">
+          <strong>Catatan tentang status "online"</strong><br>
+          Status <em>online</em> ditentukan hanya dari kolom <code>last_seen</code> pada user. Untuk menandai user sebagai <strong>online</strong> secara manual gunakan endpoint validasi: <code>GET /api/validate?key=UWUNTU-API-...</code> (curl/Postman). Setelah validasi, refresh daftar.
+        </div>
+
+        <div id="usersWrapper" style="margin-top:12px"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // admin UI logic (polling + delete)
+    const regEmail = document.getElementById('regEmail');
+    const regPass = document.getElementById('regPass');
+    const regBtn = document.getElementById('regBtn');
+    const loginEmail = document.getElementById('loginEmail');
+    const loginPass = document.getElementById('loginPass');
+    const loginBtn = document.getElementById('loginBtn');
+    const authMsg = document.getElementById('authMsg');
+    const adminTools = document.getElementById('adminTools');
+    const authForms = document.getElementById('authForms');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const usersWrapper = document.getElementById('usersWrapper');
+    const exportBtn = document.getElementById('exportBtn');
+
+    let pollInterval = null;   // polling handle
+    const POLL_MS = 15000;     // 15 seconds
+
+    regBtn.addEventListener('click', async () => {
+      const email = regEmail.value.trim(); const password = regPass.value;
+      if (!email || !password) { authMsg.textContent = 'Email & password required'; return; }
+      try {
+        const res = await fetch('/admin/register', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password }) });
+        const data = await res.json(); if (!res.ok) throw new Error(data.error || 'register error');
+        authMsg.style.color='green'; authMsg.textContent='Registered. Please login.';
+      } catch (e) { authMsg.style.color='red'; authMsg.textContent = e.message; }
+    });
+
+    loginBtn.addEventListener('click', async () => {
+      const email = loginEmail.value.trim(); const password = loginPass.value;
+      if (!email || !password) { authMsg.textContent = 'Email & password required'; return; }
+      try {
+        const res = await fetch('/admin/login', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password }) });
+        const data = await res.json(); if (!res.ok) throw new Error(data.error || 'login error');
+        authMsg.style.color='green'; authMsg.textContent='Login successful'; showAdminTools();
+      } catch (e) { authMsg.style.color='red'; authMsg.textContent = e.message; }
+    });
+
+    logoutBtn.addEventListener('click', async () => {
+      await fetch('/admin/logout', { method: 'POST' });
+      stopPolling();
+      adminTools.style.display = 'none';
+      authForms.style.display = 'block';
+      authMsg.style.color = '#9a2f60';
+      authMsg.textContent = 'Logged out';
+    });
+
+    refreshBtn.addEventListener('click', loadUsers);
+    exportBtn.addEventListener('click', ()=>{ window.location.href = '/admin/api/export'; });
+
+    async function showAdminTools(){
+      authForms.style.display='none';
+      adminTools.style.display='block';
+      await loadUsers();
+      startPolling();
+    }
+
+    function startPolling(){
+      stopPolling();
+      pollInterval = setInterval(()=> { loadUsers().catch(()=>{}); }, POLL_MS);
+    }
+
+    function stopPolling(){ if (pollInterval) { clearInterval(pollInterval); pollInterval = null; } }
+
+    async function loadUsers(){
+      usersWrapper.innerHTML = 'Loading...';
+      try{
+        const res = await fetch('/admin/api/users');
+        if (res.status === 401) {
+          usersWrapper.innerHTML='Unauthorized — please login.';
+          adminTools.style.display='none'; authForms.style.display='block';
+          return;
+        }
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Fetch failed');
+        // server returns { users: rows }
+        renderUsersList((data && data.users) ? data.users : []);
+      }catch(e){ usersWrapper.innerHTML = `<div style="color:red">Error: ${e.message}</div>`; }
+    }
+
+    function renderUsersList(users){
+      if (!users || users.length === 0) { usersWrapper.innerHTML = '<em>No users yet</em>'; return; }
+
+      const table = document.createElement('table');
+      table.innerHTML = `<thead><tr>
+        <th>ID</th><th>Name</th><th>Email</th><th>API Key</th><th>Created</th><th>API Created</th><th>Last Seen</th><th>Status</th><th>Actions</th>
+      </tr></thead>`;
+
+      const tbody = document.createElement('tbody');
+
+      users.forEach(u => {
+        const tr = document.createElement('tr');
+        // server fields may be: id, firstname, lastname, email, user_created_at, api_key, apikey_created_at, last_seen, online_now
+        const name = (u.firstname || u.name || '') + (u.lastname ? (' ' + u.lastname) : '');
+        const apiKey = u.api_key || u.key || '-';
+        const created = u.user_created_at || u.user_created || '-';
+        const keyCreated = u.apikey_created_at || u.key_created || '-';
+        const lastSeen = u.last_seen || '-';
+        const statusLabel = (u.online_now || u.status === 'online') ? '<span class="status-online">online</span>' : '<span class="status-off">offline</span>';
+
+        tr.innerHTML = `
+          <td>${u.id || u.user_id || ''}</td>
+          <td>${escapeHtml(name)}</td>
+          <td>${escapeHtml(u.email)}</td>
+          <td style="font-family:monospace">${escapeHtml(apiKey)}</td>
+          <td>${escapeHtml(created)}</td>
+          <td>${escapeHtml(keyCreated)}</td>
+          <td class="small">${escapeHtml(lastSeen)}</td>
+          <td>${statusLabel}</td>
+          <td>
+            <button class="action-btn revoke" data-id="${u.id || u.user_id}">Revoke</button>
+            <button class="action-btn delete-user" data-id="${u.id || u.user_id}">Delete</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      table.appendChild(tbody);
+      usersWrapper.innerHTML = '';
+      usersWrapper.appendChild(table);
+
+      // actions
+      Array.from(table.querySelectorAll('.revoke')).forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const id = e.currentTarget.dataset.id;
+          if (!confirm('Revoke API key for user ' + id + '?')) return;
+          const r = await fetch(`/admin/api/user/${id}/revoke`, { method: 'POST' });
+          if (r.ok) { alert('Revoked'); loadUsers(); } else { const txt = await r.text().catch(()=> 'error'); alert('Error revoking: ' + txt); }
+        });
+      });
+
+      Array.from(table.querySelectorAll('.delete-user')).forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const id = e.currentTarget.dataset.id;
+          if (!confirm('Permanently delete user with id ' + id + '? This cannot be undone.')) return;
+          try {
+            // endpoint expected: POST /admin/api/user/:id/delete (server-side must implement requireAdmin)
+            const r = await fetch(`/admin/api/user/${id}/delete`, { method: 'POST' });
+            if (r.ok) { alert('User deleted'); loadUsers(); } else { const txt = await r.text().catch(()=> 'error'); alert('Delete failed: ' + txt); }
+          } catch (err) { alert('Delete error: ' + err.message); }
+        });
+      });
+    }
+
+    function escapeHtml(s){ if(!s && s !== 0) return ''; return String(s).replace(/[&<>\"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+    // on load, detect session and show if logged in
+    (async ()=>{ try{ const res = await fetch('/admin/api/users'); if (res.ok) showAdminTools(); }catch(e){} })();
+  </script>
+
+
+
+</body>
+</html>

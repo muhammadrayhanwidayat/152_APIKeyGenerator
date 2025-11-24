@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>UwUntu Cyber Console — Generate API</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap">
+    <style>
+      :root { --bg: #0b0f1a; --neon-pink: #ff007c; --neon-blue: #00fff0; --text: #d0f0ff; }
+      *{box-sizing:border-box}
+      body{background:var(--bg);color:var(--text);font-family:'Share Tech Mono',monospace;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;height:100vh;margin:0;padding:20px;}
+      h1{color:var(--neon-pink);text-shadow:0 0 10px var(--neon-pink);font-size:2rem;margin:6px}
+
+      .panel{width:90%;max-width:1000px;margin:10px 0}
+      .form{background:rgba(255,255,255,0.03);padding:12px;border-radius:10px;border:1px solid rgba(0,255,255,0.06);display:grid;grid-template-columns:1fr 1fr;gap:10px}
+      .form .full{grid-column:1/3}
+      label{font-size:12px;color:#9fd}
+      input{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:10px;border-radius:8px;color:var(--text);width:100%}
+
+      #console{width:100%;height:300px;border:1px solid var(--neon-blue);box-shadow:0 0 15px var(--neon-blue);padding:10px;overflow-y:auto;background:rgba(0,0,0,0.25);margin-top:12px}
+      #input{width:100%;border:none;outline:none;background:transparent;border-bottom:2px solid var(--neon-pink);color:var(--text);font-size:1rem;padding:10px;margin-top:10px}
+
+      #buttons{margin-top:12px;display:flex;gap:10px}
+      button{background:transparent;border:1px solid var(--neon-blue);color:var(--neon-blue);font-family:'Share Tech Mono',monospace;padding:8px 14px;border-radius:8px;cursor:pointer}
+      button:hover{color:var(--neon-pink);border-color:var(--neon-pink)}
+
+      #apiKeyBox{margin-top:12px;padding:8px;border:1px solid var(--neon-pink);text-align:center;color:var(--neon-blue);font-family:monospace}
+      .scanlines{position:fixed;top:0;left:0;width:100%;height:100%;background:repeating-linear-gradient(to bottom, rgba(255,255,255,0.02) 0px, rgba(0,0,0,0.04) 1px, transparent 2px);pointer-events:none;z-index:10}
+
+      .meta{display:flex;justify-content:space-between;align-items:center;margin-top:8px;color:#9aa}
+    </style>
+  </head>
+  <body>
+    <h1>UwUntu Cyber Console</h1>
+
+    <div class="panel">
+      <div class="form" aria-label="user-form">
+        <div>
+          <label for="firstname">First name</label>
+          <input id="firstname" type="text" placeholder="First" />
+        </div>
+        <div>
+          <label for="lastname">Last name</label>
+          <input id="lastname" type="text" placeholder="Last" />
+        </div>
+        <div class="full">
+          <label for="email">Email address</label>
+          <input id="email" type="email" placeholder="you@example.com" />
+        </div>
+
+        <div style="grid-column:1/3;display:flex;gap:8px;align-items:center;margin-top:6px">
+          <button id="btnKey">🔑 Generate API Key</button>
+          <button id="btnSaveUser">💾 Save (user + key)</button>
+          <button id="btnCopy">📋 Copy Key</button>
+          <button id="btnRandom">⚡ Test /api/random</button>
+          <button id="btnClear">🧹 Clear Console</button>
+        </div>
+
+        <div class="full">
+          <label for="apiKeyBox">API Key (not saved until you press Save)</label>
+          <div id="apiKeyBox">No key generated yet.</div>
+        </div>
+
+      </div>
+
+      <div id="console"></div>
+      <input id="input" placeholder="> type a command..." />
+
+      <div class="meta">
+        <div>Tip: generate -> review -> save</div>
+        <div><a href="/admin.html" style="color:#ffd;">Admin panel</a></div>
+      </div>
+    </div>
+
+    <div class="scanlines"></div>
+    <script src="ui.js"></script>
+  </body>
+</html>
